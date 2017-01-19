@@ -21,19 +21,29 @@ func main() {
 	flag.Parse()
 
 	username, password := credentials(*userNamePtr)
-	if *verbosityPtr == true {
-		fmt.Printf("Username: %s\n", username)
-	}
 
 	// GET request
 	// Basic Auth for all request
 	resty.SetBasicAuth(username, password)
 	resty.RemoveProxy()
 
+	if *serverPtr == "server.example.com" {
+		fmt.Print("\nEnter Servername: ")
+		reader := bufio.NewReader(os.Stdin)
+		inputStr, _ := reader.ReadString('\n')
+		inputStr = strings.TrimSpace(inputStr)
+		flag.Set("server", inputStr)
+	}
+
 	reqBaseURL := "https://" + *serverPtr + ":4443"
 	reqLoginURL := reqBaseURL + "/login"
 	reqKeyURL := reqBaseURL + "/object/secret-keys"
-	fmt.Println("Login URL: " + reqLoginURL)
+
+	if *verbosityPtr == true {
+		fmt.Printf("Username: %s\n", username)
+		fmt.Println("Login URL: " + reqLoginURL)
+	}
+
 	resp, err := resty.R().Get(reqLoginURL)
 
 	authToken := resp.Header()["X-Sds-Auth-Token"][0]
@@ -72,10 +82,27 @@ func main() {
 	}
 
 	test := respKey1.(map[string]interface{})
+	fmt.Println("\nHere are your current keys")
 	fmt.Println("Secret Key 1: ", test["secret_key_1"])
 	fmt.Println("Secret Key 1 Expiration: ", test["key_expiry_timestamp_1"])
 	fmt.Println("Secret Key 2: ", test["secret_key_2"])
 	fmt.Println("Secret Key 2 Expiration: ", test["key_expiry_timestamp_2"])
+
+	// generate a new keys
+	resp, err = resty.R().
+		SetBody(`{}`).
+		Post(reqKeyURL)
+
+	if *verbosityPtr == true {
+		// explore response object
+		fmt.Printf("\nError: %v", err)
+		fmt.Printf("\nResponse Status Code: %v", resp.StatusCode())
+		fmt.Printf("\nResponse Status: %v", resp.Status())
+		fmt.Printf("\nResponse Time: %v", resp.Time())
+		fmt.Printf("\nResponse Recevied At: %v", resp.ReceivedAt())
+		fmt.Println("\nRespone AuthToken: ", authToken)
+		fmt.Printf("\nResponse Body: %v", resp.String()) // or resp.String() or string(resp.Body())
+	}
 
 }
 
@@ -91,6 +118,7 @@ func credentials(username string) (string, string) {
 	bytePassword, err := terminal.ReadPassword(int(syscall.Stdin))
 	if err == nil {
 		password = string(bytePassword)
+		fmt.Println("\n")
 	} else {
 		fmt.Println("Error capturing password")
 	}
