@@ -2,17 +2,21 @@ package main
 
 import (
 	"bufio"
+	"flag"
 	"fmt"
 	"os"
 	"strings"
 	"syscall"
 
+	"github.com/go-resty/resty"
 	"golang.org/x/crypto/ssh/terminal"
-	"gopkg.in/resty.v0"
 )
 
 func main() {
-	// This is a test
+	// Setup the basic command line arguments
+	serverPtr := flag.String("server", "server.example.com", "ECS Cluster to Connect to")
+	flag.Parse()
+
 	username, password := credentials()
 	fmt.Printf("Username: %s, Password: %s\n", username, password)
 
@@ -20,7 +24,9 @@ func main() {
 	// Basic Auth for all request
 	resty.SetBasicAuth(username, password)
 
-	resp, err := resty.R().Get("https://objlab.paychex.com/login")
+	reqBaseURL := "https://" + *serverPtr + ":4443/"
+	reqLoginURL := reqBaseURL + "/login"
+	resp, err := resty.R().Get(reqLoginURL)
 
 	// explore response object
 	fmt.Printf("\nError: %v", err)
