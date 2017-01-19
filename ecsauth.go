@@ -8,9 +8,11 @@ import (
 	"syscall"
 
 	"golang.org/x/crypto/ssh/terminal"
+	"gopkg.in/resty.v0"
 )
 
 func main() {
+	// This is a test
 	username, password := credentials()
 	fmt.Printf("Username: %s, Password: %s\n", username, password)
 
