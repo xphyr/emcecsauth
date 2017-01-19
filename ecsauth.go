@@ -17,10 +17,13 @@ func main() {
 	// Setup the basic command line arguments
 	serverPtr := flag.String("server", "server.example.com", "ECS Cluster to Connect to")
 	userNamePtr := flag.String("username", "user@example.com", "Username to authenticate as")
+	verbosityPtr := flag.Bool("verbose", false, "Enable extra output for debugging.")
 	flag.Parse()
 
 	username, password := credentials(*userNamePtr)
-	fmt.Printf("Username: %s\n", username)
+	if *verbosityPtr == true {
+		fmt.Printf("Username: %s\n", username)
+	}
 
 	// GET request
 	// Basic Auth for all request
@@ -31,18 +34,20 @@ func main() {
 	reqLoginURL := reqBaseURL + "/login"
 	reqKeyURL := reqBaseURL + "/object/secret-keys"
 	fmt.Println("Login URL: " + reqLoginURL)
-	resp, _ := resty.R().Get(reqLoginURL)
+	resp, err := resty.R().Get(reqLoginURL)
 
 	authToken := resp.Header()["X-Sds-Auth-Token"][0]
 
-	// explore response object
-	// fmt.Printf("\nError: %v", err)
-	// fmt.Printf("\nResponse Status Code: %v", resp.StatusCode())
-	// fmt.Printf("\nResponse Status: %v", resp.Status())
-	// fmt.Printf("\nResponse Time: %v", resp.Time())
-	// fmt.Printf("\nResponse Recevied At: %v", resp.ReceivedAt())
-	// fmt.Println("\nRespone AuthToken: ", authToken)
-	// fmt.Printf("\nResponse Body: %v", resp.String()) // or resp.String() or string(resp.Body())
+	if *verbosityPtr == true {
+		// explore response object
+		fmt.Printf("\nError: %v", err)
+		fmt.Printf("\nResponse Status Code: %v", resp.StatusCode())
+		fmt.Printf("\nResponse Status: %v", resp.Status())
+		fmt.Printf("\nResponse Time: %v", resp.Time())
+		fmt.Printf("\nResponse Recevied At: %v", resp.ReceivedAt())
+		fmt.Println("\nRespone AuthToken: ", authToken)
+		fmt.Printf("\nResponse Body: %v", resp.String()) // or resp.String() or string(resp.Body())
+	}
 
 	//lets try getting the current auth-Tokens
 	resty.SetHeader("Accept", "application/json")
@@ -51,17 +56,21 @@ func main() {
 		"X-SDS-AUTH-TOKEN": authToken,
 	})
 
-	resp, _ = resty.R().Get(reqKeyURL)
+	resp, err = resty.R().Get(reqKeyURL)
 	var respKey1 interface{}
 	json.Unmarshal([]byte(resp.String()), &respKey1)
 
-	// explore response object
-	// fmt.Printf("\nError: %v", err)
-	// fmt.Printf("\nResponse Status Code: %v", resp.StatusCode())
-	// fmt.Printf("\nResponse Status: %v", resp.Status())
-	// fmt.Printf("\nResponse Time: %v", resp.Time())
-	// fmt.Printf("\nResponse Recevied At: %v", resp.ReceivedAt())
-	// fmt.Println("\nResponse Body: ", resp.String()) // or resp.String() or string(resp.Body())
+	if *verbosityPtr == true {
+		// explore response object
+		fmt.Printf("\nError: %v", err)
+		fmt.Printf("\nResponse Status Code: %v", resp.StatusCode())
+		fmt.Printf("\nResponse Status: %v", resp.Status())
+		fmt.Printf("\nResponse Time: %v", resp.Time())
+		fmt.Printf("\nResponse Recevied At: %v", resp.ReceivedAt())
+		fmt.Println("\nRespone AuthToken: ", authToken)
+		fmt.Printf("\nResponse Body: %v", resp.String()) // or resp.String() or string(resp.Body())
+	}
+
 	test := respKey1.(map[string]interface{})
 	fmt.Println("Secret Key 1: ", test["secret_key_1"])
 	fmt.Println("Secret Key 1 Expiration: ", test["key_expiry_timestamp_1"])
