@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"os"
@@ -30,7 +31,7 @@ func main() {
 	reqLoginURL := reqBaseURL + "/login"
 	reqKeyURL := reqBaseURL + "/object/secret-keys"
 	fmt.Println("Login URL: " + reqLoginURL)
-	resp, err := resty.R().Get(reqLoginURL)
+	resp, _ := resty.R().Get(reqLoginURL)
 
 	authToken := resp.Header()["X-Sds-Auth-Token"][0]
 
@@ -40,7 +41,7 @@ func main() {
 	// fmt.Printf("\nResponse Status: %v", resp.Status())
 	// fmt.Printf("\nResponse Time: %v", resp.Time())
 	// fmt.Printf("\nResponse Recevied At: %v", resp.ReceivedAt())
-	fmt.Println("\nRespone AuthToken: ", authToken)
+	// fmt.Println("\nRespone AuthToken: ", authToken)
 	// fmt.Printf("\nResponse Body: %v", resp.String()) // or resp.String() or string(resp.Body())
 
 	//lets try getting the current auth-Tokens
@@ -50,14 +51,22 @@ func main() {
 		"X-SDS-AUTH-TOKEN": authToken,
 	})
 
-	resp, err = resty.R().Get(reqKeyURL)
+	resp, _ = resty.R().Get(reqKeyURL)
+	var respKey1 interface{}
+	json.Unmarshal([]byte(resp.String()), &respKey1)
+
 	// explore response object
-	fmt.Printf("\nError: %v", err)
-	fmt.Printf("\nResponse Status Code: %v", resp.StatusCode())
-	fmt.Printf("\nResponse Status: %v", resp.Status())
-	fmt.Printf("\nResponse Time: %v", resp.Time())
-	fmt.Printf("\nResponse Recevied At: %v", resp.ReceivedAt())
-	fmt.Printf("\nResponse Body: %v", resp.String()) // or resp.String() or string(resp.Body())
+	// fmt.Printf("\nError: %v", err)
+	// fmt.Printf("\nResponse Status Code: %v", resp.StatusCode())
+	// fmt.Printf("\nResponse Status: %v", resp.Status())
+	// fmt.Printf("\nResponse Time: %v", resp.Time())
+	// fmt.Printf("\nResponse Recevied At: %v", resp.ReceivedAt())
+	// fmt.Println("\nResponse Body: ", resp.String()) // or resp.String() or string(resp.Body())
+	test := respKey1.(map[string]interface{})
+	fmt.Println("Secret Key 1: ", test["secret_key_1"])
+	fmt.Println("Secret Key 1 Expiration: ", test["key_expiry_timestamp_1"])
+	fmt.Println("Secret Key 2: ", test["secret_key_2"])
+	fmt.Println("Secret Key 2 Expiration: ", test["key_expiry_timestamp_2"])
 
 }
 
@@ -65,7 +74,7 @@ func credentials(username string) (string, string) {
 	reader := bufio.NewReader(os.Stdin)
 	password := ""
 
-	if username == "" {
+	if username == "user@example.com" {
 		fmt.Print("Enter Username: ")
 		username, _ = reader.ReadString('\n')
 	}
