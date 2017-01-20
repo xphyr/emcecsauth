@@ -6,6 +6,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 	"syscall"
 
@@ -18,6 +19,9 @@ func main() {
 	serverPtr := flag.String("server", "server.example.com", "ECS Cluster to Connect to")
 	userNamePtr := flag.String("username", "user@example.com", "Username to authenticate as")
 	verbosityPtr := flag.Bool("verbose", false, "Enable extra output for debugging.")
+	listOnlyPtr := flag.Bool("listonly", false, "Only list current keys")
+	expirationPtr := flag.Int("timeoutexpiration", 0, "expiration time in minutes (optional)")
+	deactivatePtr := flag.Bool("deactivate", false, "deactivate all issued keys")
 	flag.Parse()
 
 	username, password := credentials(*userNamePtr)
@@ -88,22 +92,50 @@ func main() {
 	fmt.Println("Secret Key 2: ", test["secret_key_2"])
 	fmt.Println("Secret Key 2 Expiration: ", test["key_expiry_timestamp_2"])
 
-	// generate a new keys
-	resp, err = resty.R().
-		SetBody(`{}`).
-		Post(reqKeyURL)
+	if *listOnlyPtr == false {
+		//generate request Body
+		var reqBody string
+		if *expirationPtr == 0 {
+			reqBody = "{}"
+		} else {
+			reqBody = "{ \"existing_key_expiry_time_mins\": \"" + strconv.Itoa(*expirationPtr) + "\"}"
+		}
+		fmt.Println(reqBody)
+		// generate a new keys
+		resp, err = resty.R().
+			SetBody(reqBody).
+			Post(reqKeyURL)
 
-	if *verbosityPtr == true {
-		// explore response object
-		fmt.Printf("\nError: %v", err)
-		fmt.Printf("\nResponse Status Code: %v", resp.StatusCode())
-		fmt.Printf("\nResponse Status: %v", resp.Status())
-		fmt.Printf("\nResponse Time: %v", resp.Time())
-		fmt.Printf("\nResponse Recevied At: %v", resp.ReceivedAt())
-		fmt.Println("\nRespone AuthToken: ", authToken)
-		fmt.Printf("\nResponse Body: %v", resp.String()) // or resp.String() or string(resp.Body())
+		if *verbosityPtr == true {
+			// explore response object
+			fmt.Printf("\nError: %v", err)
+			fmt.Printf("\nResponse Status Code: %v", resp.StatusCode())
+			fmt.Printf("\nResponse Status: %v", resp.Status())
+			fmt.Printf("\nResponse Time: %v", resp.Time())
+			fmt.Printf("\nResponse Recevied At: %v", resp.ReceivedAt())
+			fmt.Println("\nRespone AuthToken: ", authToken)
+			fmt.Printf("\nResponse Body: %v", resp.String()) // or resp.String() or string(resp.Body())
+		}
 	}
 
+	if *deactivatePtr == true {
+		reqKeyDelURL := reqBaseURL + "/object/secret-keys/deactivate"
+		reqBody := "{}"
+		resp, err = resty.R().
+			SetBody(reqBody).
+			Post(reqKeyDelURL)
+
+		if *verbosityPtr == true {
+			// explore response object
+			fmt.Printf("\nError: %v", err)
+			fmt.Printf("\nResponse Status Code: %v", resp.StatusCode())
+			fmt.Printf("\nResponse Status: %v", resp.Status())
+			fmt.Printf("\nResponse Time: %v", resp.Time())
+			fmt.Printf("\nResponse Recevied At: %v", resp.ReceivedAt())
+			fmt.Println("\nRespone AuthToken: ", authToken)
+			fmt.Printf("\nResponse Body: %v", resp.String()) // or resp.String() or string(resp.Body())
+		}
+	}
 }
 
 func credentials(username string) (string, string) {
