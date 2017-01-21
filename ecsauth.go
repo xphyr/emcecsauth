@@ -34,7 +34,9 @@ func main() {
 		flag.Set("server", inputStr)
 	}
 
-	authToken := serverLogin(*serverPtr, username, password)
+	reqBaseURL := "https://" + servername + ":4443"
+
+	authToken := serverLogin(username, password, reqBaseURL)
 
 	//lets try getting the current auth-Tokens
 	getS3AuthTokens(authToken)
@@ -68,23 +70,13 @@ func credentials(username string) (string, string) {
 	return strings.TrimSpace(username), strings.TrimSpace(password)
 }
 
-func serverLogin(servername string, username string, password string) string {
+func serverLogin(username string, password string, baseURL string) string {
 	// GET request
 	// Basic Auth for all request
 	resty.SetBasicAuth(username, password)
 	resty.RemoveProxy()
 
-	if servername == "server.example.com" {
-		fmt.Print("\nEnter Servername: ")
-		reader := bufio.NewReader(os.Stdin)
-		inputStr, _ := reader.ReadString('\n')
-		inputStr = strings.TrimSpace(inputStr)
-		flag.Set("server", inputStr)
-	}
-
-	reqBaseURL := "https://" + *serverPtr + ":4443"
-	reqLoginURL := reqBaseURL + "/login"
-	reqKeyURL := reqBaseURL + "/object/secret-keys"
+	reqLoginURL := baseURL + "/login"
 
 	if *verbosityPtr == true {
 		fmt.Printf("Username: %s\n", username)
@@ -109,33 +101,10 @@ func serverLogin(servername string, username string, password string) string {
 	return authToken
 }
 
-func getS3AuthTokens(autToken string) {
-	resty.SetHeader("Accept", "application/json")
-	resty.SetHeaders(map[string]string{
-		"Content-Type":     "application/json",
-		"X-SDS-AUTH-TOKEN": authToken,
-	})
-
-	resp, err = resty.R().Get(reqKeyURL)
-	var respKey1 interface{}
-	json.Unmarshal([]byte(resp.String()), &respKey1)
-
-	if *verbosityPtr == true {
-		// explore response object
-		fmt.Printf("\nError: %v", err)
-		fmt.Printf("\nResponse Status Code: %v", resp.StatusCode())
-		fmt.Printf("\nResponse Status: %v", resp.Status())
-		fmt.Printf("\nResponse Time: %v", resp.Time())
-		fmt.Printf("\nResponse Recevied At: %v", resp.ReceivedAt())
-		fmt.Println("\nRespone AuthToken: ", authToken)
-		fmt.Printf("\nResponse Body: %v", resp.String()) // or resp.String() or string(resp.Body())
-	}
-}
-
-func deleteS3Tokens(authToken string) {
-	reqKeyDelURL := reqBaseURL + "/object/secret-keys/deactivate"
+func deleteS3Tokens(authToken string, baseURL string) {
+	reqKeyDelURL := baseURL + "/object/secret-keys/deactivate"
 	reqBody := "{}"
-	resp, err = resty.R().
+	resp, err := resty.R().
 		SetBody(reqBody).
 		Post(reqKeyDelURL)
 
@@ -161,7 +130,7 @@ func listS3Tokens(authToken string) {
 	}
 	fmt.Println(reqBody)
 	// generate a new keys
-	resp, err = resty.R().
+	resp, err := resty.R().
 		SetBody(reqBody).
 		Post(reqKeyURL)
 
@@ -182,4 +151,28 @@ func listS3Tokens(authToken string) {
 	fmt.Println("Secret Key 1 Expiration: ", test["key_expiry_timestamp_1"])
 	fmt.Println("Secret Key 2: ", test["secret_key_2"])
 	fmt.Println("Secret Key 2 Expiration: ", test["key_expiry_timestamp_2"])
+}
+
+func getS3AuthTokens(authToken string, baseURL string) {
+	resty.SetHeader("Accept", "application/json")
+	resty.SetHeaders(map[string]string{
+		"Content-Type":     "application/json",
+		"X-SDS-AUTH-TOKEN": authToken,
+	})
+	reqKeyURL := baseURL + "/object/secret-keys"
+
+	resp, err := resty.R().Get(reqKeyURL)
+	var respKey1 interface{}
+	json.Unmarshal([]byte(resp.String()), &respKey1)
+
+	if *verbosityPtr == true {
+		// explore response object
+		fmt.Printf("\nError: %v", err)
+		fmt.Printf("\nResponse Status Code: %v", resp.StatusCode())
+		fmt.Printf("\nResponse Status: %v", resp.Status())
+		fmt.Printf("\nResponse Time: %v", resp.Time())
+		fmt.Printf("\nResponse Recevied At: %v", resp.ReceivedAt())
+		fmt.Println("\nRespone AuthToken: ", authToken)
+		fmt.Printf("\nResponse Body: %v", resp.String()) // or resp.String() or string(resp.Body())
+	}
 }
