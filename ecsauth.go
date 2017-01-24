@@ -5,8 +5,9 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
+	"log"
 	"os"
-	"strconv"
 	"strings"
 	"syscall"
 
@@ -14,15 +15,52 @@ import (
 	"golang.org/x/crypto/ssh/terminal"
 )
 
+var (
+	Trace   *log.Logger
+	Info    *log.Logger
+	Warning *log.Logger
+	Error   *log.Logger
+)
+
+func Init(
+	traceHandle io.Writer,
+	infoHandle io.Writer,
+	warningHandle io.Writer,
+	errorHandle io.Writer) {
+
+	Trace = log.New(traceHandle,
+		"TRACE: ",
+		log.Ldate|log.Ltime|log.Lshortfile)
+
+	Info = log.New(infoHandle,
+		"INFO: ",
+		log.Ldate|log.Ltime|log.Lshortfile)
+
+	Warning = log.New(warningHandle,
+		"WARNING: ",
+		log.Ldate|log.Ltime|log.Lshortfile)
+
+	Error = log.New(errorHandle,
+		"ERROR: ",
+		log.Ldate|log.Ltime|log.Lshortfile)
+}
+
 func main() {
 	// Setup the basic command line arguments
 	serverPtr := flag.String("server", "server.example.com", "ECS Cluster to Connect to")
 	userNamePtr := flag.String("username", "user@example.com", "Username to authenticate as")
-	verbosityPtr := flag.Bool("verbose", false, "Enable extra output for debugging.")
-	listOnlyPtr := flag.Bool("listonly", false, "Only list current keys")
-	expirationPtr := flag.Int("timeoutexpiration", 0, "expiration time in minutes (optional)")
+	// verbosityPtr := flag.Bool("verbose", false, "Enable extra output for debugging.")
+	// listOnlyPtr := flag.Bool("listonly", false, "Only list current keys")
+	// expirationPtr := flag.Int("timeoutexpiration", 0, "expiration time in minutes (optional)")
 	deactivatePtr := flag.Bool("deactivate", false, "deactivate all issued keys")
 	flag.Parse()
+
+	Init(os.Stdout, os.Stdout, os.Stdout, os.Stderr)
+
+	Trace.Println("I have something standard to say")
+	Info.Println("Special Information")
+	Warning.Println("There is something you need to know about")
+	Error.Println("Something has failed")
 
 	username, password := credentials(*userNamePtr)
 
@@ -34,19 +72,15 @@ func main() {
 		flag.Set("server", inputStr)
 	}
 
-	reqBaseURL := "https://" + servername + ":4443"
+	reqBaseURL := "https://" + *serverPtr + ":4443"
 
 	authToken := serverLogin(username, password, reqBaseURL)
 
 	//lets try getting the current auth-Tokens
-	getS3AuthTokens(authToken)
-
-	if *listOnlyPtr == false {
-		listS3Tokens(authToken)
-	}
+	getS3AuthTokens(authToken, reqBaseURL)
 
 	if *deactivatePtr == true {
-		deleteS3Tokens(authToken)
+		deleteS3Tokens(authToken, reqBaseURL)
 	}
 }
 
@@ -64,7 +98,7 @@ func credentials(username string) (string, string) {
 		password = string(bytePassword)
 		fmt.Println("\n")
 	} else {
-		fmt.Println("Error capturing password")
+		Error.Println("Error capturing password")
 	}
 
 	return strings.TrimSpace(username), strings.TrimSpace(password)
@@ -78,25 +112,17 @@ func serverLogin(username string, password string, baseURL string) string {
 
 	reqLoginURL := baseURL + "/login"
 
-	if *verbosityPtr == true {
-		fmt.Printf("Username: %s\n", username)
-		fmt.Println("Login URL: " + reqLoginURL)
-	}
+	Info.Println("Username: " + username)
+	Info.Println("Login URL: " + reqLoginURL)
 
-	resp, err := resty.R().Get(reqLoginURL)
+	resp, _ := resty.R().Get(reqLoginURL)
 
 	authToken := resp.Header()["X-Sds-Auth-Token"][0]
 
-	if *verbosityPtr == true {
-		// explore response object
-		fmt.Printf("\nError: %v", err)
-		fmt.Printf("\nResponse Status Code: %v", resp.StatusCode())
-		fmt.Printf("\nResponse Status: %v", resp.Status())
-		fmt.Printf("\nResponse Time: %v", resp.Time())
-		fmt.Printf("\nResponse Recevied At: %v", resp.ReceivedAt())
-		fmt.Println("\nRespone AuthToken: ", authToken)
-		fmt.Printf("\nResponse Body: %v", resp.String()) // or resp.String() or string(resp.Body())
-	}
+	Info.Println("\nResponse Status Code: " + string(resp.StatusCode()))
+	Info.Println("\nResponse Status: " + resp.Status())
+	Info.Println("\nRespone AuthToken: " + authToken)
+	Info.Println("\nResponse Body: " + resp.String()) // or resp.String() or string(resp.Body())
 
 	return authToken
 }
@@ -104,53 +130,15 @@ func serverLogin(username string, password string, baseURL string) string {
 func deleteS3Tokens(authToken string, baseURL string) {
 	reqKeyDelURL := baseURL + "/object/secret-keys/deactivate"
 	reqBody := "{}"
-	resp, err := resty.R().
+	resp, _ := resty.R().
 		SetBody(reqBody).
 		Post(reqKeyDelURL)
 
-	if *verbosityPtr == true {
-		// explore response object
-		fmt.Printf("\nError: %v", err)
-		fmt.Printf("\nResponse Status Code: %v", resp.StatusCode())
-		fmt.Printf("\nResponse Status: %v", resp.Status())
-		fmt.Printf("\nResponse Time: %v", resp.Time())
-		fmt.Printf("\nResponse Recevied At: %v", resp.ReceivedAt())
-		fmt.Println("\nRespone AuthToken: ", authToken)
-		fmt.Printf("\nResponse Body: %v", resp.String()) // or resp.String() or string(resp.Body())
-	}
-}
+	Info.Println("\nResponse Status Code: " + string(resp.StatusCode()))
+	Info.Println("\nResponse Status: " + resp.Status())
+	Info.Println("\nRespone AuthToken: " + authToken)
+	Info.Println("\nResponse Body: " + resp.String()) // or resp.String() or string(resp.Body())
 
-func listS3Tokens(authToken string) {
-	//generate request Body
-	var reqBody string
-	if *expirationPtr == 0 {
-		reqBody = "{}"
-	} else {
-		reqBody = "{ \"existing_key_expiry_time_mins\": \"" + strconv.Itoa(*expirationPtr) + "\"}"
-	}
-	fmt.Println(reqBody)
-	// generate a new keys
-	resp, err := resty.R().
-		SetBody(reqBody).
-		Post(reqKeyURL)
-
-	if *verbosityPtr == true {
-		// explore response object
-		fmt.Printf("\nError: %v", err)
-		fmt.Printf("\nResponse Status Code: %v", resp.StatusCode())
-		fmt.Printf("\nResponse Status: %v", resp.Status())
-		fmt.Printf("\nResponse Time: %v", resp.Time())
-		fmt.Printf("\nResponse Recevied At: %v", resp.ReceivedAt())
-		fmt.Println("\nRespone AuthToken: ", authToken)
-		fmt.Printf("\nResponse Body: %v", resp.String()) // or resp.String() or string(resp.Body())
-	}
-
-	test := respKey1.(map[string]interface{})
-	fmt.Println("\nHere are your current keys")
-	fmt.Println("Secret Key 1: ", test["secret_key_1"])
-	fmt.Println("Secret Key 1 Expiration: ", test["key_expiry_timestamp_1"])
-	fmt.Println("Secret Key 2: ", test["secret_key_2"])
-	fmt.Println("Secret Key 2 Expiration: ", test["key_expiry_timestamp_2"])
 }
 
 func getS3AuthTokens(authToken string, baseURL string) {
@@ -161,18 +149,21 @@ func getS3AuthTokens(authToken string, baseURL string) {
 	})
 	reqKeyURL := baseURL + "/object/secret-keys"
 
-	resp, err := resty.R().Get(reqKeyURL)
+	resp, _ := resty.R().Get(reqKeyURL)
+
+	Info.Println("\nResponse Status Code: " + string(resp.StatusCode()))
+	Info.Println("\nResponse Status: " + resp.Status())
+	Info.Println("\nRespone AuthToken: " + authToken)
+	Info.Println("\nResponse Body: " + resp.String()) // or resp.String() or string(resp.Body())
+
 	var respKey1 interface{}
 	json.Unmarshal([]byte(resp.String()), &respKey1)
 
-	if *verbosityPtr == true {
-		// explore response object
-		fmt.Printf("\nError: %v", err)
-		fmt.Printf("\nResponse Status Code: %v", resp.StatusCode())
-		fmt.Printf("\nResponse Status: %v", resp.Status())
-		fmt.Printf("\nResponse Time: %v", resp.Time())
-		fmt.Printf("\nResponse Recevied At: %v", resp.ReceivedAt())
-		fmt.Println("\nRespone AuthToken: ", authToken)
-		fmt.Printf("\nResponse Body: %v", resp.String()) // or resp.String() or string(resp.Body())
-	}
+	test := respKey1.(map[string]interface{})
+	fmt.Println("\nHere are your current keys")
+	fmt.Println("Secret Key 1: ", test["secret_key_1"])
+	fmt.Println("Secret Key 1 Expiration: ", test["key_expiry_timestamp_1"])
+	fmt.Println("Secret Key 2: ", test["secret_key_2"])
+	fmt.Println("Secret Key 2 Expiration: ", test["key_expiry_timestamp_2"])
+
 }
