@@ -11,6 +11,8 @@ import (
 	"strings"
 	"syscall"
 
+	"io/ioutil"
+
 	"github.com/go-resty/resty"
 	"golang.org/x/crypto/ssh/terminal"
 )
@@ -22,7 +24,7 @@ var (
 	Error   *log.Logger
 )
 
-func Init(
+func InitLog(
 	traceHandle io.Writer,
 	infoHandle io.Writer,
 	warningHandle io.Writer,
@@ -33,8 +35,7 @@ func Init(
 		log.Ldate|log.Ltime|log.Lshortfile)
 
 	Info = log.New(infoHandle,
-		"INFO: ",
-		log.Ldate|log.Ltime|log.Lshortfile)
+		"INFO: ", log.LstdFlags)
 
 	Warning = log.New(warningHandle,
 		"WARNING: ",
@@ -49,23 +50,22 @@ func main() {
 	// Setup the basic command line arguments
 	serverPtr := flag.String("server", "server.example.com", "ECS Cluster to Connect to")
 	userNamePtr := flag.String("username", "user@example.com", "Username to authenticate as")
-	// verbosityPtr := flag.Bool("verbose", false, "Enable extra output for debugging.")
+	verbosityPtr := flag.Bool("verbose", false, "Enable extra output for debugging.")
 	// listOnlyPtr := flag.Bool("listonly", false, "Only list current keys")
 	// expirationPtr := flag.Int("timeoutexpiration", 0, "expiration time in minutes (optional)")
 	deactivatePtr := flag.Bool("deactivate", false, "deactivate all issued keys")
 	flag.Parse()
 
-	Init(os.Stdout, os.Stdout, os.Stdout, os.Stderr)
-
-	Trace.Println("I have something standard to say")
-	Info.Println("Special Information")
-	Warning.Println("There is something you need to know about")
-	Error.Println("Something has failed")
+	if *verbosityPtr == true {
+		InitLog(os.Stdout, os.Stdout, os.Stdout, os.Stderr)
+	} else {
+		InitLog(ioutil.Discard, ioutil.Discard, os.Stdout, os.Stderr)
+	}
 
 	username, password := credentials(*userNamePtr)
 
 	if *serverPtr == "server.example.com" {
-		fmt.Print("\nEnter Servername: ")
+		fmt.Print("Enter Servername: ")
 		reader := bufio.NewReader(os.Stdin)
 		inputStr, _ := reader.ReadString('\n')
 		inputStr = strings.TrimSpace(inputStr)
@@ -96,9 +96,9 @@ func credentials(username string) (string, string) {
 	bytePassword, err := terminal.ReadPassword(int(syscall.Stdin))
 	if err == nil {
 		password = string(bytePassword)
-		fmt.Println("\n")
+		fmt.Print("\n")
 	} else {
-		Error.Println("Error capturing password")
+		Error.Fatalf("Error capturing password.")
 	}
 
 	return strings.TrimSpace(username), strings.TrimSpace(password)
@@ -115,9 +115,16 @@ func serverLogin(username string, password string, baseURL string) string {
 	Info.Println("Username: " + username)
 	Info.Println("Login URL: " + reqLoginURL)
 
-	resp, _ := resty.R().Get(reqLoginURL)
+	resp, err := resty.R().Get(reqLoginURL)
+	if err != nil {
+		Error.Fatalf("\n - Error connecting to ECS: %s", err)
+	}
 
 	authToken := resp.Header()["X-Sds-Auth-Token"][0]
+
+	if authToken == "" {
+		Error.Fatalln("ECS did not return an authToken.")
+	}
 
 	Info.Println("\nResponse Status Code: " + string(resp.StatusCode()))
 	Info.Println("\nResponse Status: " + resp.Status())
